@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>La Barraca Finanzas</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#172333;background:#f4f6fa}*{box-sizing:border-box}body{margin:0}.wrap{max-width:760px;margin:auto;padding:20px}header{background:#172d42;color:white;padding:22px 20px}header .wrap{padding:0}h1{font-size:24px;margin:0}h2{font-size:19px;margin:0 0 14px}.sub{color:#a9c4d7;font-size:13px;margin-top:5px}.card{background:white;border:1px solid #e2e7ee;border-radius:16px;padding:20px;margin:16px 0;box-shadow:0 3px 12px #142d4310}label{display:block;font-weight:600;font-size:13px;margin:13px 0 6px}input{width:100%;border:1px solid #bdc8d6;border-radius:10px;padding:13px;font-size:16px}button{border:0;background:#176e59;color:white;border-radius:10px;padding:13px 17px;font-weight:700;font-size:15px;cursor:pointer}button:disabled{opacity:.5;cursor:wait}.ghost{background:#e7edf2;color:#1b3448}.row{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}.muted{color:#637386;font-size:13px}.error{color:#b3261e}.success{color:#126b4c}.stat{background:#f5f8fa;border-radius:12px;padding:15px;flex:1;min-width:140px}.stat strong{display:block;font-size:23px;margin-top:6px}.list{display:grid;gap:10px}.item{padding:12px 0;border-bottom:1px solid #eef1f5}.item:last-child{border:0}.hidden{display:none}.pill{background:#e5f4eb;color:#146943;padding:5px 10px;border-radius:30px;font-size:12px}#msg{margin-top:12px;white-space:pre-wrap}.note{background:#fff8e7;border:1px solid #ead9a9;border-radius:10px;padding:12px;font-size:13px;color:#69521b}footer{text-align:center;color:#7d8996;font-size:12px;padding:24px}
+</style>
+</head>
+<body><header><div class="wrap"><h1>La Barraca Finanzas</h1><div class="sub">Control financiero del negocio · Versión inicial</div></div></header>
+<main class="wrap">
+<section id="login" class="card"><h2>Ingresar</h2><p class="muted">Usá el correo y la contraseña del usuario que creaste en Authentication → Users de este proyecto.</p><form id="loginForm"><label for="email">Correo electrónico</label><input id="email" type="email" autocomplete="username" required><label for="password">Contraseña</label><input id="password" type="password" autocomplete="current-password" required><div style="margin-top:18px"><button id="loginBtn" type="submit">Ingresar</button></div></form><div id="msg" role="status"></div></section>
+<section id="dashboard" class="hidden"><div class="card"><div class="row"><div><h2 id="welcome">Panel financiero</h2><div class="muted" id="userEmail"></div></div><button class="ghost" id="logout">Salir</button></div><p class="note">Primera versión de consulta. Todavía no permite registrar pagos ni cerrar caja; evitamos movimientos accidentales mientras completamos las reglas de seguridad.</p></div>
+<div class="card"><div class="row"><h2>Estado del sistema</h2><span class="pill">Conectado</span></div><div class="row"><div class="stat"><span class="muted">Cuentas configuradas</span><strong id="accountCount">—</strong></div><div class="stat"><span class="muted">Empleados</span><strong id="employeeCount">—</strong></div><div class="stat"><span class="muted">Turnos registrados</span><strong id="shiftCount">—</strong></div></div><p id="loadError" class="error"></p><button class="ghost" id="refresh">Actualizar datos</button></div>
+<div class="card"><h2>Mis cuentas</h2><div id="accounts" class="list muted">Cargando…</div></div>
+<div class="card"><h2>Personal</h2><div id="employees" class="list muted">Cargando…</div></div>
+<div class="card"><h2>Próximas funciones</h2><p class="muted">Caja de mediodía y noche · Movimientos · Deudas y vencimientos · Adelantos · Informes.</p></div></section>
+</main><footer>La Barraca Finanzas · Datos guardados en tu proyecto Supabase</footer>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+'use strict';
+const URL_SUPABASE='https://ifgngmvukalyuajbinfl.supabase.co';
+const CLAVE_PUBLICA='sb_publishable_PV7zYRXeD1pfd_Y_pKlmDA_izFnWcco';
+const client=window.supabase.createClient(URL_SUPABASE,CLAVE_PUBLICA);
+const $=id=>document.getElementById(id);
+const money=n=>new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:0}).format(Number(n)||0);
+function setMsg(text,isError=true){$('msg').textContent=text;$('msg').className=isError?'error':'success'}
+function renderItems(id,rows,formatter){const root=$(id);root.replaceChildren();if(!rows.length){root.textContent='Sin registros';return;}rows.forEach(r=>{const div=document.createElement('div');div.className='item';div.textContent=formatter(r);root.appendChild(div);});}
+async function loadData(){ $('loadError').textContent='';const queries=await Promise.all([
+ client.from('accounts').select('name,account_type,status,opening_balance').order('name'),
+ client.from('employees').select('name,pay_type,pay_rate').order('name'),
+ client.from('shifts').select('id',{count:'exact',head:true})
+]);const [a,e,s]=queries;const errors=queries.filter(q=>q.error).map(q=>q.error.message);if(errors.length)$('loadError').textContent='No se pudo consultar alguna tabla: '+errors.join(' | ');
+ $('accountCount').textContent=a.error?'—':a.data.length;
+ $('employeeCount').textContent=e.error?'—':e.data.length;
+ $('shiftCount').textContent=s.error?'—':s.count??0;
+ if(!a.error)renderItems('accounts',a.data,r=>r.name+' · '+(r.status==='transition'?'En transición':'Activa')+' · Saldo inicial configurado: '+money(r.opening_balance));
+ if(!e.error)renderItems('employees',e.data,r=>r.name+' · '+money(r.pay_rate)+(r.pay_type==='monthly'?'/mes':r.pay_type==='daily'?'/jornada':'/hora'));
+}
+async function showSession(){const {data:{user},error}=await client.auth.getUser();if(error||!user){$('dashboard').classList.add('hidden');$('login').classList.remove('hidden');return;}const {data:profile,error:profileError}=await client.from('profiles').select('display_name,role').eq('id',user.id).single();if(profileError||profile?.role!=='admin'){await client.auth.signOut();$('dashboard').classList.add('hidden');$('login').classList.remove('hidden');setMsg('No se pudo verificar el rol de administrador. Revisá las políticas de profiles.');return;}$('welcome').textContent='Hola, '+(profile.display_name||'Administrador');$('userEmail').textContent=user.email||'';$('login').classList.add('hidden');$('dashboard').classList.remove('hidden');await loadData();}
+$('loginForm').addEventListener('submit',async ev=>{ev.preventDefault();$('loginBtn').disabled=true;setMsg('Ingresando…',false);try{const {error}=await client.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)throw error;setMsg('');await showSession();}catch(err){setMsg(err.message||'No se pudo ingresar');}finally{$('loginBtn').disabled=false;}});
+$('logout').addEventListener('click',async()=>{await client.auth.signOut();$('dashboard').classList.add('hidden');$('login').classList.remove('hidden');$('password').value='';});
+$('refresh').addEventListener('click',loadData);
+showSession().catch(err=>setMsg(err.message||'Error de conexión'));
+</script></body></html>
